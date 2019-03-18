@@ -1,27 +1,3 @@
-// DESIGN >_<
-// main
-//    opt = Opt::from_args();
-//    input = read_input(opt.files);
-//    output = string: String;
-//    for f in input:
-//        count = thread(f);
-//        output.push(newline + count + filename)
-//    
-//    sort(output)
-//    print(output)
-//
-//read_input() 
-//
-//thread(file) -> count 
-//    count_lines
-//        count_words
-//            count_chars
-//    return (l, w, c)
-//
-// DESIGN >_<
-//
-
-
 // Extern crates
 #[macro_use]
 extern crate structopt;
@@ -65,6 +41,7 @@ struct Opt {
     files: Vec<PathBuf>,
 }
 
+// Main function
 fn main() -> std::io::Result<()> {
     // Get arguments
     let opt = Opt::from_args();
@@ -133,5 +110,3 @@ fn count_string(string: String, opt: &Opt) -> String {
     }
     return format!("{:>10} {:>10} {:>10}", lin, wrd, chr)
 }
-
-
