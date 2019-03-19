@@ -41,47 +41,55 @@ struct Opt {
     files: Vec<PathBuf>,
 }
 
+#[derive(Debug)]
+struct Count {
+    lines: i64,
+    words: i64,
+    chars: i64,
+}
+
 // Main function
-fn main() -> std::io::Result<()> {
+fn main() {
     // Get arguments
     let opt = Opt::from_args();
 
-    // Run program
-    let result = run(&opt)?;
+    //  what to count
+    let mut wtc =  
 
-    // Print results
-    for r in &result {
-        println!("{}", r);
-    }
-    
-    // Clean exit
-    Ok(())
+    // Run program
+    run(&opt);
 }
 
-fn run(opt: &Opt) -> Result<Vec<String>, io::Error> {
+fn run(opt: &Opt) {
 
     // Create vector for results
-    let mut result = Vec::new();
-
+    let mut result = 0;
+    let mut total = Count {lines: 0, words: 0, chars: 0};
     // Check all paths in FILES
     for path in &opt.files {
-        
         // Check if path exists
         if ! path.exists() {
-            result.push(format!("wcrust: {:?}: No such file or directory.", &path));
-
+            eprintln!("wcrust: {:?}: No such file or directory.", &path);
+        } else if path.is_dir() && ! opt.directories {
+            eprintln!("wcrust: {:?}: Is a directory.", &path);
         // If file
         } else if path.is_file() {
-            let content = read_file(&path)?;
-            let file_count = count_string(content, &opt);
-            result.push(format!("{:<40} {:?}", file_count, &path));
-
-        // If directory
-        } else if path.is_dir() && ! opt.directories {
-            result.push(format!("wcrust: {:?}: is a directory.", &path));
+            // Read file to string
+            let content = read_file(&path); 
+            //                              // TODO: Rework unwrap here
+            let count = count_string(content.unwrap(), &opt);
+            // Push results into vec
+            println!("{:<8?} {:?}", count, &path);
+            // Add to totals
+            result += 1;
+            total.lines += count.lines;
+            total.words += count.words;
+            total.chars += count.chars;
         }
     }
-    Ok(result)
+    if opt.files.len() > 1 {
+        println!("{:<8?} total", total);
+    }
 }
             
 fn read_file(path: &PathBuf) -> Result<String, io::Error> {
@@ -96,17 +104,14 @@ fn read_file(path: &PathBuf) -> Result<String, io::Error> {
 }
 
 // Counting
-fn count_string(string: String, opt: &Opt) -> String {
+fn count_string(string: String, opt: &Opt) -> Count {
     let mut lin: i64 = 0;
     let mut wrd: i64 = 0;
-    let mut chr: i64 = 0;
 
     for line in string.lines() {
         lin += 1;
-        for word in line.split_whitespace() {
-            wrd += 1;
-            chr += word.len() as i64;
-        }
+        wrd += line.split_whitespace().count() as i64;
     }
-    return format!("{:>10} {:>10} {:>10}", lin, wrd, chr)
+    let chr = string.len() as i64;
+    return Count { lines: lin, words: wrd, chars: chr };
 }
