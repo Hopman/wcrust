@@ -1,15 +1,11 @@
-// Extern crates
-#[macro_use]
+//#[macro_use]
 extern crate structopt;
 
-// STD
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
-use std::thread;
 
-// EXT
 use structopt::StructOpt;
 
 // Opt: Arguments struct
@@ -33,7 +29,7 @@ struct Opt {
     words: bool,
 
     #[structopt(short="D", long="skip-directories")]
-    /// Skip directories 
+    /// Skip directories
     directories: bool,
 
     #[structopt(name="FILE", parse(from_os_str))]
@@ -41,72 +37,105 @@ struct Opt {
     files: Vec<PathBuf>,
 }
 
-// Main function
-fn main() -> std::io::Result<()> {
-    // Get arguments
-    let opt = Opt::from_args();
-
-    // Run program
-    let result = run(&opt)?;
-
-    // Print results
-    for r in &result {
-        println!("{}", r);
-    }
-    
-    // Clean exit
-    Ok(())
+#[derive(Debug)]
+struct WhatToCount {
+    lines: bool,
+    words: bool,
+    chars: bool,
+    bytes: bool,
 }
 
-fn run(opt: &Opt) -> Result<Vec<String>, io::Error> {
+// Main function
+fn main() -> Result<(), io::Error> {
+    // Get arguments
+    let opt = Opt::from_args();
+    let mut total_lines = 0;
+    let mut total_words = 0;
+    let mut total_chars = 0;
+    let mut total_bytes = 0;
 
-    // Create vector for results
-    let mut result = Vec::new();
+    let mut wtc = WhatToCount {lines: false, words: false, chars: false, bytes: false};
+
+    if ! opt.bytes && ! opt.chars && ! opt.lines && ! opt.words {
+        wtc.lines = true;
+        wtc.words = true;
+        wtc.chars = true;
+    } else {
+        wtc.lines = opt.lines;
+        wtc.words = opt.words;
+        wtc.chars = opt.chars;
+        wtc.bytes = opt.bytes;
+    }
 
     // Check all paths in FILES
     for path in &opt.files {
-        
         // Check if path exists
         if ! path.exists() {
-            result.push(format!("wcrust: {:?}: No such file or directory.", &path));
-
+            eprintln!("wcrust: {:?}: No such file or directory.", &path);
+        } else if path.is_dir() && ! opt.directories {
+            eprintln!("wcrust: {:?}: Is a directory.", &path);
         // If file
         } else if path.is_file() {
-            let content = read_file(&path)?;
-            let file_count = count_string(content, &opt);
-            result.push(format!("{:<40} {:?}", file_count, &path));
+            // Read contents of file to string
+            let mut file = File::open(path)?;
+            let mut content = String::new();
+            let bts = match file.read_to_string(&mut content) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    eprintln!("wcrust: {:?}: Could not read to string:\n\t{}", &path, e);
+                    0
+                }
+            };
 
-        // If directory
-        } else if path.is_dir() && ! opt.directories {
-            result.push(format!("wcrust: {:?}: is a directory.", &path));
+            let mut lin = 0;
+            let mut wrd = 0;
+            let mut chr = 0;
+
+            let mut print_string = String::new();
+
+            // Count
+            if wtc.lines {
+                lin = content.lines().count();
+                print_string.push_str(&format!("{:<8?}", lin));
+            }
+            if wtc.words {
+                wrd = content.split_whitespace().count();
+                print_string.push_str(&format!("{:<8?}", wrd));
+            }
+            if wtc.chars {
+                chr = content.len();
+                print_string.push_str(&format!("{:<8?}", chr));
+            }
+            if wtc.bytes {
+                print_string.push_str(&format!("{:<8?}", bts));
+            }
+
+            println!("{} {:>8}", print_string, path.to_str().unwrap());
+
+            // Add to totals
+            total_lines += lin;
+            total_words += wrd;
+            total_chars += chr;
+            total_bytes += bts;
         }
     }
-    Ok(result)
-}
-            
-fn read_file(path: &PathBuf) -> Result<String, io::Error> {
-    
-    // Read contents of file to string  
-    let mut file = File::open(path)?;
-    let mut content = String::new();
-    file.read_to_string(&mut content)?;
-
-    // Return content
-    Ok(content)
-}
-
-// Counting
-fn count_string(string: String, opt: &Opt) -> String {
-    let mut lin: i64 = 0;
-    let mut wrd: i64 = 0;
-    let mut chr: i64 = 0;
-
-    for line in string.lines() {
-        lin += 1;
-        for word in line.split_whitespace() {
-            wrd += 1;
-            chr += word.len() as i64;
-        }
+    if opt.files.len() > 1 {
+            let mut total_string = String::new();
+            // Format
+            if wtc.lines {
+                total_string.push_str(&format!("{:>8?}", total_lines));
+            }
+            if wtc.words {
+                total_string.push_str(&format!("{:>8?}", total_words));
+            }
+            if wtc.chars {
+                total_string.push_str(&format!("{:>8?}", total_chars));
+            }
+            if wtc.bytes {
+                total_string.push_str(&format!("{:>8?}", total_bytes));
+            }
+            total_string.push_str(" total");
+            println!("{}", total_string);
     }
-    return format!("{:>10} {:>10} {:>10}", lin, wrd, chr)
+    Ok(())
 }
