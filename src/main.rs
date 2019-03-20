@@ -45,8 +45,14 @@ struct WhatToCount {
     bytes: bool,
 }
 
+fn main() {
+    ::std::process::exit(run());
+}
+
+
 // Main function
-fn main() -> Result<(), io::Error> {
+fn run() -> i32 {
+    let mut exit_status = 0;
     // Get arguments
     let opt = Opt::from_args();
     let mut total_lines = 0;
@@ -77,14 +83,22 @@ fn main() -> Result<(), io::Error> {
         // If file
         } else if path.is_file() {
             // Read contents of file to string
-            let mut file = File::open(path)?;
+            let mut file = match File::open(path) {
+                Ok(f) => f,
+                Err(e) => {
+                    exit_status = 1;
+                    eprintln!("wcrust: {:?}: Could not open file: {}", &path, e);
+                    continue 
+                },
+            };
             let mut content = String::new();
             let bts = match file.read_to_string(&mut content) {
                 Ok(bytes) => bytes,
                 Err(e) => {
-                    eprintln!("wcrust: {:?}: Could not read to string:\n\t{}", &path, e);
-                    0
-                }
+                    exit_status = 1;
+                    eprintln!("wcrust: {:?}: Could not read to string: {}", &path, e);
+                    continue
+                },
             };
 
             let mut lin = 0;
@@ -110,7 +124,7 @@ fn main() -> Result<(), io::Error> {
                 print_string.push_str(&format!("{:<8?}", bts));
             }
 
-            println!("{} {:>8}", print_string, path.to_str().unwrap());
+            println!("{} {:>}", print_string, path.to_str().unwrap());
 
             // Add to totals
             total_lines += lin;
@@ -123,19 +137,19 @@ fn main() -> Result<(), io::Error> {
             let mut total_string = String::new();
             // Format
             if wtc.lines {
-                total_string.push_str(&format!("{:>8?}", total_lines));
+                total_string.push_str(&format!("{:<8?}", total_lines));
             }
             if wtc.words {
-                total_string.push_str(&format!("{:>8?}", total_words));
+                total_string.push_str(&format!("{:<8?}", total_words));
             }
             if wtc.chars {
-                total_string.push_str(&format!("{:>8?}", total_chars));
+                total_string.push_str(&format!("{:<8?}", total_chars));
             }
             if wtc.bytes {
-                total_string.push_str(&format!("{:>8?}", total_bytes));
+                total_string.push_str(&format!("{:<8?}", total_bytes));
             }
             total_string.push_str(" total");
             println!("{}", total_string);
     }
-    Ok(())
+    return exit_status
 }
