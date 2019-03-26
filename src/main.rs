@@ -37,6 +37,10 @@ struct Opt {
     files: Vec<PathBuf>,
 }
 
+/*
+ * WhatToCount:
+ * Simple struct for what to count.
+ */
 #[derive(Debug)]
 struct WhatToCount {
     lines: bool,
@@ -45,111 +49,193 @@ struct WhatToCount {
     bytes: bool,
 }
 
+// Default and argument parsing for WhatToCount
+impl WhatToCount {
+    // Default settings
+    fn default() -> WhatToCount {
+        WhatToCount {
+            lines: true,
+            words: true,
+            chars: true,
+            bytes: false, // Do not count bytes as default
+        }
+    }
+
+    // Read from arguments
+    fn from_args(opt: &Opt) -> WhatToCount {
+        WhatToCount {
+            lines: opt.lines,
+            words: opt.words,
+            chars: opt.chars,
+            bytes: opt.bytes,
+        }
+    }
+}
+
+/*
+ * Count:
+ * Simple count struct for all the possible counts.
+ * When count is None, it will not be processed.
+ */
+#[derive(Debug)]
+struct Count {
+    lines: Option<usize>,
+    words: Option<usize>,
+    chars: Option<usize>,
+    bytes: Option<usize>,
+}
+
+impl Count {
+    // Initiate new Count with Nones
+    fn new() -> Count {
+        Count {
+            lines: None,
+            words: None,
+            chars: None,
+            bytes: None,
+        }
+    }
+    // Initiate new Count with all zeroes
+    fn zeros() -> Count {
+        Count {
+            lines: Some(0),
+            words: Some(0),
+            chars: Some(0),
+            bytes: Some(0),
+        }
+    }
+    // add function for counting totals
+    fn add(&mut self, count: &Count, wtc: &WhatToCount) {
+        if wtc.lines {
+            self.lines = Some(self.lines.unwrap() + count.lines.unwrap());
+        }
+        if wtc.words {
+            self.words = Some(self.words.unwrap() + count.words.unwrap());
+        }
+        if wtc.chars {
+            self.chars = Some(self.chars.unwrap() + count.chars.unwrap());
+        }
+    }
+}
+
+/*
+ * CountResult:
+ * This will be in the result vector, printing either the count or the
+ * error from reading the file.
+ * (No other errors will be handled for now).
+ */
+#[derive(Debug)]
+struct CountResult {
+    count_result: Result<Count, io::Error>,
+    path: PathBuf,
+}
+
+// MAIN
+// Runs the actual main function (run) and exits on it's return.
 fn main() {
     ::std::process::exit(run());
 }
 
-
-// Main function
+// RUN
+// Does the actual work, returns exit status.
 fn run() -> i32 {
+    // Set exit status to 0
     let mut exit_status = 0;
+
     // Get arguments
     let opt = Opt::from_args();
-    let mut total_lines = 0;
-    let mut total_words = 0;
-    let mut total_chars = 0;
-    let mut total_bytes = 0;
 
-    let mut wtc = WhatToCount {lines: false, words: false, chars: false, bytes: false};
-
-    if ! opt.bytes && ! opt.chars && ! opt.lines && ! opt.words {
-        wtc.lines = true;
-        wtc.words = true;
-        wtc.chars = true;
+    // Get what to count from args or default
+    let wtc = if opt.lines || opt.words || opt.chars || opt.bytes {
+        WhatToCount::from_args(&opt)
     } else {
-        wtc.lines = opt.lines;
-        wtc.words = opt.words;
-        wtc.chars = opt.chars;
-        wtc.bytes = opt.bytes;
-    }
+        WhatToCount::default()
+    };
 
-    // Check all paths in FILES
-    for path in &opt.files {
-        // Check if path exists
-        if ! path.exists() {
-            eprintln!("wcrust: {:?}: No such file or directory.", &path);
-        } else if path.is_dir() && ! opt.directories {
-            eprintln!("wcrust: {:?}: Is a directory.", &path);
-        // If file
-        } else if path.is_file() {
-            // Read contents of file to string
-            let mut file = match File::open(path) {
-                Ok(f) => f,
-                Err(e) => {
-                    exit_status = 1;
-                    eprintln!("wcrust: {:?}: Could not open file: {}", &path, e);
-                    continue 
-                },
-            };
-            let mut content = String::new();
-            let bts = match file.read_to_string(&mut content) {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    exit_status = 1;
-                    eprintln!("wcrust: {:?}: Could not read to string: {}", &path, e);
-                    continue
-                },
-            };
 
-            let mut lin = 0;
-            let mut wrd = 0;
-            let mut chr = 0;
+    // If no files are given, read from stdin
+    if opt.files.is_empty() {
+        println!("TODO: Get input");//TODO
+    } else {
+        // Results vector
+        let mut results = Vec::new();
 
-            let mut print_string = String::new();
-
-            // Count
-            if wtc.lines {
-                lin = content.lines().count();
-                print_string.push_str(&format!("{:<8?}", lin));
-            }
-            if wtc.words {
-                wrd = content.split_whitespace().count();
-                print_string.push_str(&format!("{:<8?}", wrd));
-            }
-            if wtc.chars {
-                chr = content.len();
-                print_string.push_str(&format!("{:<8?}", chr));
-            }
-            if wtc.bytes {
-                print_string.push_str(&format!("{:<8?}", bts));
-            }
-
-            println!("{} {:>}", print_string, path.to_str().unwrap());
-
-            // Add to totals
-            total_lines += lin;
-            total_words += wrd;
-            total_chars += chr;
-            total_bytes += bts;
+        for path in &opt.files {
+            // Push CountResult with path into result vector
+            results.push(CountResult {
+                    count_result: count(path, &wtc),
+                    path: path.to_path_buf(),
+            });
         }
+
+        // TODO: Get max width from results
+        let max_w = 8;
+
+        let mut totals = Count::zeros();
+
+        // Print all the results
+        for result in &results {
+            match &result.count_result {
+                Ok(count)  => {
+                    fancy_print(&count, &wtc, max_w, result.path.to_str().unwrap());
+                    totals.add(&count, &wtc);
+                },
+                Err(error) => {
+                    // Print to error to stderr and zeros to stdout
+                    eprintln!("wcrust: {}: {}", result.path.to_str().unwrap(), error);
+                    fancy_print(&Count::zeros(), &wtc, max_w, result.path.to_str().unwrap()); exit_status = 1;
+                },
+            }
+        }
+        // Print totals
+        fancy_print(&totals, &wtc, max_w, "total");
     }
-    if opt.files.len() > 1 {
-            let mut total_string = String::new();
-            // Format
-            if wtc.lines {
-                total_string.push_str(&format!("{:<8?}", total_lines));
-            }
-            if wtc.words {
-                total_string.push_str(&format!("{:<8?}", total_words));
-            }
-            if wtc.chars {
-                total_string.push_str(&format!("{:<8?}", total_chars));
-            }
-            if wtc.bytes {
-                total_string.push_str(&format!("{:<8?}", total_bytes));
-            }
-            total_string.push_str(" total");
-            println!("{}", total_string);
-    }
+
+    // Return exit status
     return exit_status
+}
+
+fn count(path: &PathBuf, wtc: &WhatToCount) -> Result<Count, io::Error> {
+    let mut string = String::new();
+    let mut file = File::open(path)?;
+    file.read_to_string(&mut string)?;
+    Ok(count_string(string, wtc))
+}
+
+// Count the string (only count requested values)
+fn count_string(string: String, wtc: &WhatToCount) -> Count {
+    let mut count = Count::new();
+    if wtc.lines {
+        count.lines = Some(string.lines().count());
+    }
+    if wtc.words {
+        count.words = Some(string.split_whitespace().count());
+    }
+    if wtc.chars {
+        count.chars = Some(string.len());
+    }
+    // TODO bytes not working (yet)
+    if wtc.bytes {
+        println!("Bytes not yet supported.");
+        ::std::process::exit(1);
+    }
+    return count
+}
+
+fn fancy_print(c: &Count, wtc: &WhatToCount, max_w: usize, path: &str) {
+    let mut print_string = String::new();
+    if wtc.lines {
+        print_string.push_str(&format!("{:>1$?}", c.lines.unwrap(), max_w));
+    }
+    if wtc.words {
+        print_string.push_str(&format!("{:>1$?}", c.words.unwrap(), max_w));
+    }
+    if wtc.chars {
+        print_string.push_str(&format!("{:>1$?}", c.chars.unwrap(), max_w));
+    }
+    if wtc.bytes {
+        print_string.push_str(&format!("{:>1$?}", c.bytes.unwrap(), max_w));
+    }
+    print_string.push_str(&format!(" {}", path));
+    println!("{}", print_string);
 }
