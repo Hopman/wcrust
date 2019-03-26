@@ -115,23 +115,14 @@ impl Count {
         if wtc.chars {
             self.chars = Some(self.chars.unwrap() + count.chars.unwrap());
         }
+        if wtc.bytes {
+            self.bytes = Some(self.bytes.unwrap() + count.bytes.unwrap());
+        }
     }
 }
 
-/*
- * CountResult:
- * This will be in the result vector, printing either the count or the
- * error from reading the file.
- * (No other errors will be handled for now).
- */
-#[derive(Debug)]
-struct CountResult {
-    count_result: Result<Count, io::Error>,
-    path: PathBuf,
-}
-
 // MAIN
-// Runs the actual main function (run) and exits on it's return.
+// Starts the actual main function (run) and exits on run's return value.
 fn main() {
     ::std::process::exit(run());
 }
@@ -160,12 +151,14 @@ fn run() -> i32 {
         // Results vector
         let mut results = Vec::new();
 
+        // Iterate over paths
         for path in &opt.files {
             // Push CountResult with path into result vector
-            results.push(CountResult {
-                    count_result: count(path, &wtc),
-                    path: path.to_path_buf(),
-            });
+            results.push((
+                    count(path, &wtc),
+                    path.to_path_buf(),
+                )
+            );
         }
 
         // TODO: Get max width from results
@@ -175,15 +168,27 @@ fn run() -> i32 {
 
         // Print all the results
         for result in &results {
-            match &result.count_result {
+
+            match &result.0 {
                 Ok(count)  => {
-                    fancy_print(&count, &wtc, max_w, result.path.to_str().unwrap());
+                    fancy_print(
+                        &count,
+                        &wtc,
+                        max_w,
+                        result.1.to_str().unwrap()
+                    );
                     totals.add(&count, &wtc);
                 },
                 Err(error) => {
                     // Print to error to stderr and zeros to stdout
-                    eprintln!("wcrust: {}: {}", result.path.to_str().unwrap(), error);
-                    fancy_print(&Count::zeros(), &wtc, max_w, result.path.to_str().unwrap()); exit_status = 1;
+                    eprintln!("wcrust: {}: {}", result.1.to_str().unwrap(), error);
+                    fancy_print(
+                        &Count::zeros(),
+                        &wtc,
+                        max_w,
+                        result.1.to_str().unwrap()
+                    );
+                    exit_status = 1;
                 },
             }
         }
