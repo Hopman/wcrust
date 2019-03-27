@@ -85,7 +85,7 @@ struct Count {
 }
 
 impl Count {
-    // Initiate new Count with Nones
+    // Initiate new Count with zeroes
     fn new() -> Count {
         Count {
             lines: 0,
@@ -110,7 +110,7 @@ impl Count {
         }
     }
 
-    // Get maximum digit count of integers
+    // Get maximum digit width: used in printing results
     fn max_w(&self) -> usize {
         let max_w = vec![
             self.lines.to_string().len(),
@@ -118,13 +118,16 @@ impl Count {
             self.chars.to_string().len(),
             self.bytes.to_string().len(),
         ].iter().max().unwrap().to_owned();
+
         // Add 1 so there'll always be an empty space
         return max_w + 1
     }
 }
 
+//
 // MAIN
 // Starts the actual main function (run) and exits with run's return value
+//
 fn main() {
     ::std::process::exit(run());
 }
@@ -194,8 +197,7 @@ fn run() -> i32 {
             ));
         }
 
-        // Maximum width of count
-        // Totals will always have the biggest numbers
+        // Totals will always have the biggest numbers (yes, biggest)
         let max_w = totals.max_w();
 
         // Print all the results
@@ -208,10 +210,9 @@ fn run() -> i32 {
                         max_w,
                         result.1.to_str().unwrap()
                     );
-                    // Add to totals
                 },
                 Err(error) => {
-                    // Print to error to stderr and zeros to stdout
+                    // Print to error to stderr and zeros to stdout then continue
                     eprintln!("wcrust: {}: {}", result.1.to_str().unwrap(), error);
                     fancy_print(
                         &Count::new(),
@@ -224,7 +225,7 @@ fn run() -> i32 {
                 },
             }
         }
-        // Print totals
+        // Print totals for more than 1 result
         if results.len() > 1 {
             fancy_print(&totals, &wtc, max_w, "total");
         }
@@ -234,19 +235,21 @@ fn run() -> i32 {
     return exit_status
 }
 
-// Read and count file
+// Read file and count contents
+// Todo: read non-UTF-8 files
 fn count_file(path: &PathBuf, wtc: &WhatToCount, totals: &mut Count) -> Result<Count, io::Error> {
     // Open and read file
-    let mut string = String::new();
+    let mut content = String::new();
     let mut file = File::open(path)?;
-    file.read_to_string(&mut string)?;
+    file.read_to_string(&mut content)?;
 
     // Count string
-    let count = count_string(string, wtc);
+    let count = count_string(content, wtc);
 
     // Increment the totals
     totals.add(&count, wtc);
 
+    // Return successful count
     Ok(count)
 }
 
@@ -254,6 +257,7 @@ fn count_file(path: &PathBuf, wtc: &WhatToCount, totals: &mut Count) -> Result<C
 fn count_string(string: String, wtc: &WhatToCount) -> Count {
     // Initiate Count (zeros)
     let mut count = Count::new();
+    // Actual couting for requested values
     if wtc.lines {
         count.lines = string.lines().count();
     }
@@ -263,7 +267,7 @@ fn count_string(string: String, wtc: &WhatToCount) -> Count {
     if wtc.chars {
         count.chars = string.len();
     }
-    // TODO bytes not working (yet)
+    // Todo: bytes not working; exit immediately
     if wtc.bytes {
         eprintln!("Bytes not yet supported.");
         ::std::process::exit(1);
