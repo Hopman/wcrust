@@ -85,7 +85,7 @@ struct Count {
 }
 
 impl Count {
-    // Initiate new Count with zeroes
+    // New zero-filled count
     fn new() -> Count {
         Count {
             lines: 0,
@@ -94,7 +94,8 @@ impl Count {
             bytes: 0,
         }
     }
-    // add function for counting totals
+
+    // 'add' function for counting totals
     fn add(&mut self, count: &Count, wtc: &WhatToCount) {
         if wtc.lines {
             self.lines += count.lines;
@@ -111,22 +112,23 @@ impl Count {
     }
 
     // Get maximum digit width: used in printing results
+    // (Unclean)
     fn max_w(&self) -> usize {
         let max_w = vec![
             self.lines.to_string().len(),
             self.words.to_string().len(),
             self.chars.to_string().len(),
             self.bytes.to_string().len(),
-        ].iter().max().unwrap().to_owned();
+        ].iter().max().unwrap().to_owned(); // (Unclean)
 
-        // Add 1 so there'll always be an empty space
+        // Add one to make column 1 line wider than maxmimum width
         return max_w + 1
     }
 }
 
 //
 // MAIN
-// Starts the actual main function (run) and exits with run's return value
+// Starts the actual run function, where the actual work happens and exits with run's return value
 //
 fn main() {
     ::std::process::exit(run());
@@ -148,7 +150,6 @@ fn run() -> i32 {
         WhatToCount::default()
     };
 
-    // If no files are given, read from stdin
     if opt.files.is_empty() {
         // No files given, so reading from stdin
         let path = "";
@@ -180,7 +181,7 @@ fn run() -> i32 {
         }
 
     } else {
-        // Results vector
+        // Multiple results; create vector
         let mut results = Vec::new();
 
         // Total Count
@@ -212,8 +213,8 @@ fn run() -> i32 {
                     );
                 },
                 Err(error) => {
-                    // Print to error to stderr and zeros to stdout then continue
-                    eprintln!("wcrust: {}: {}", result.1.to_str().unwrap(), error);
+                    // Print to error to stderr and a zero-Count to stdout, then continue
+                    eprintln!("wcrust: {}: {}", result.1.to_str().unwrap(), error); // Unclean
                     fancy_print(
                         &Count::new(),
                         &wtc,
@@ -225,10 +226,12 @@ fn run() -> i32 {
                 },
             }
         }
+
         // Print totals for more than 1 result
         if results.len() > 1 {
             fancy_print(&totals, &wtc, max_w, "total");
         }
+
     }
 
     // Return exit status
