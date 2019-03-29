@@ -128,15 +128,8 @@ impl Count {
 
 //
 // MAIN
-// Starts the actual run function, where the actual work happens and exits with run's return value
 //
 fn main() {
-    ::std::process::exit(run());
-}
-
-// RUN
-// Does the actual work, returns exit status
-fn run() -> i32 {
     // Set exit status to 0
     let mut exit_status = 0;
 
@@ -150,95 +143,55 @@ fn run() -> i32 {
         WhatToCount::default()
     };
 
+    // Create empty vector and totals
+    let mut result_vector = Vec::new();
+    let mut totals = Count::new();
+
+    // If no files are given, read from stdin
     if opt.files.is_empty() {
-        // No files given, so reading from stdin
-        let path = "";
-        let mut input = String::new();
-        let input_result = io::stdin().read_to_string(&mut input);
-
-        match input_result {
-            Ok(_) => {
-                let count = count_string(input, &wtc);
-                let max_w = count.max_w();
-                fancy_print(
-                    &count,
-                    &wtc,
-                    max_w,
-                    path,
-                );
-            }
-            Err(error) => {
-                eprintln!("wcrust: {}", error);
-                let count = Count::new();
-                let max_w = 2;
-                fancy_print(
-                    &count,
-                    &wtc,
-                    max_w,
-                    path,
-                );
-            }
-        }
-
+        let count_result = count_stdin(&wtc, &mut totals);
+        result_vector.push((count_result, PathBuf::new()))
     } else {
-        // Multiple results; create vector
-        let mut results = Vec::new();
-
-        // Total Count
-        let mut totals = Count::new();
-
-        // Iterate over paths
+        // Iterate over files
         for path in &opt.files {
-            // Get count from path
             let count_result = count_file(path, &wtc, &mut totals);
-            // Push with path into result vector
-            results.push((
-                    count_result,
-                    path.to_path_buf(),
-            ));
+            result_vector.push((count_result, path.to_path_buf()));
         }
-
-        // Totals will always have the biggest numbers (yes, biggest)
-        let max_w = totals.max_w();
-
-        // Print all the results
-        for result in &results {
-            match &result.0 {
-                Ok(count)  => {
-                    fancy_print(
-                        &count,
-                        &wtc,
-                        max_w,
-                        result.1.to_str().unwrap()
-                    );
-                },
-                Err(error) => {
-                    // Print to error to stderr and a zero-Count to stdout, then continue
-                    eprintln!("wcrust: {}: {}", result.1.to_str().unwrap(), error); // Unclean
-                    fancy_print(
-                        &Count::new(),
-                        &wtc,
-                        max_w,
-                        result.1.to_str().unwrap()
-                    );
-                    // Ran into an error; exit status should reflect this
-                    exit_status = 1;
-                },
-            }
-        }
-
-        // Print totals for more than 1 result
-        if results.len() > 1 {
-            fancy_print(&totals, &wtc, max_w, "total");
-        }
-
     }
 
-    // Return exit status
-    return exit_status
+    // Get maximum width from totals
+    let max_w = totals.max_w();
+
+    // Iterate over results and print counts or errors
+    for result in &result_vector {
+        // result.0 = Result<Count, io::Error>
+        // result.1 = path
+        match &result.0 {
+            Ok(count) =>  {
+                // Print in columns
+                fancy_print(&count, &wtc, max_w, &result.1);
+            },
+            Err(error) => {
+                // Exit status on error
+                exit_status = 1;
+                // Print error to stderr
+                eprintln!("wcrust: {:?}: {}", result.1, error);
+                // Print count (zeros+path) to stdout
+                fancy_print(&Count::new(), &wtc, max_w, &result.1);
+            },
+        }
+    }
+
+    // For more than one file print totals
+    if result_vector.len() > 1 {
+        fancy_print(&totals, &wtc, max_w, &PathBuf::from("total"));
+    }
+
+    // Exit with exit status
+    ::std::process::exit(exit_status);
 }
 
-// Read file and count contents
+// Read file to a string, count the string, increment totals
 // Todo: read non-UTF-8 files
 fn count_file(path: &PathBuf, wtc: &WhatToCount, totals: &mut Count) -> Result<Count, io::Error> {
     // Open and read file
@@ -256,10 +209,28 @@ fn count_file(path: &PathBuf, wtc: &WhatToCount, totals: &mut Count) -> Result<C
     Ok(count)
 }
 
+// Read stdin, count the string, increment totals
+// Todo: read non-UTF8
+fn count_stdin(wtc: &WhatToCount, totals: &mut Count) -> Result<Count, io::Error> {
+    // Read stdin
+    let mut content = String::new();
+    io::stdin().read_to_string(&mut content)?;
+
+    // Count
+    let count = count_string(content, wtc);
+
+    // Increment totals
+    totals.add(&count, wtc);
+
+    // Return successful count
+    Ok(count)
+}
+
 // Count the string (only count requested values)
 fn count_string(string: String, wtc: &WhatToCount) -> Count {
     // Initiate Count (zeros)
     let mut count = Count::new();
+
     // Actual couting for requested values
     if wtc.lines {
         count.lines = string.lines().count();
@@ -281,8 +252,11 @@ fn count_string(string: String, wtc: &WhatToCount) -> Count {
 }
 
 // Print results in columns
-fn fancy_print(count: &Count, wtc: &WhatToCount, max_w: usize, path: &str) {
+fn fancy_print(count: &Count, wtc: &WhatToCount, max_w: usize, path: &PathBuf) {
+    // Create empty string
     let mut print_string = String::new();
+
+    // Check what to count and push to string
     if wtc.lines {
         print_string.push_str(&format!("{:>1$?}", count.lines, max_w));
     }
@@ -295,6 +269,8 @@ fn fancy_print(count: &Count, wtc: &WhatToCount, max_w: usize, path: &str) {
     if wtc.bytes {
         print_string.push_str(&format!("{:>1$?}", count.bytes, max_w));
     }
-    print_string.push_str(&format!(" {}", path));
+    print_string.push_str(&format!(" {}", path.to_string_lossy()));
+
+    // PRINT
     println!("{}", print_string);
 }
