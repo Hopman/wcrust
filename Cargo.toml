@@ -1,8 +1,9 @@
 [package]
-name = "wcrust"
+name    = "wcrust"
 version = "0.1.0"
 authors = ["jhopmans <joost@jhopmans.nl>"]
 edition = "2018"
 
 [dependencies]
-structopt = "0.2"
+structopt   = "0.2"
+bstr        = "0.1"
