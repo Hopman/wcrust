@@ -1,10 +1,13 @@
 //#[macro_use]
 extern crate structopt;
+extern crate bstr;
 
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
+
+use bstr::BString;
 
 use structopt::StructOpt;
 
@@ -195,12 +198,14 @@ fn main() {
 // Todo: read non-UTF-8 files
 fn count_file(path: &PathBuf, wtc: &WhatToCount, totals: &mut Count) -> Result<Count, io::Error> {
     // Open and read file
-    let mut content = String::new();
+    let mut content_vec = Vec::new();
     let mut file = File::open(path)?;
-    file.read_to_string(&mut content)?;
+    file.read_to_end(&mut content_vec)?;
+
+    let bstring = BString::from_vec(content_vec);
 
     // Count string
-    let count = count_string(content, wtc);
+    let count = count_string(bstring, wtc);
 
     // Increment the totals
     totals.add(&count, wtc);
@@ -213,11 +218,12 @@ fn count_file(path: &PathBuf, wtc: &WhatToCount, totals: &mut Count) -> Result<C
 // Todo: read non-UTF8
 fn count_stdin(wtc: &WhatToCount, totals: &mut Count) -> Result<Count, io::Error> {
     // Read stdin
-    let mut content = String::new();
-    io::stdin().read_to_string(&mut content)?;
+    let mut content_vec = Vec::new();
+    io::stdin().read_to_end(&mut content_vec)?;
+    let bstring = BString::from_vec(content_vec);
 
     // Count
-    let count = count_string(content, wtc);
+    let count = count_string(bstring, wtc);
 
     // Increment totals
     totals.add(&count, wtc);
@@ -227,7 +233,7 @@ fn count_stdin(wtc: &WhatToCount, totals: &mut Count) -> Result<Count, io::Error
 }
 
 // Count the string (only count requested values)
-fn count_string(string: String, wtc: &WhatToCount) -> Count {
+fn count_string(string: BString, wtc: &WhatToCount) -> Count {
     // Initiate Count (zeros)
     let mut count = Count::new();
 
@@ -236,15 +242,14 @@ fn count_string(string: String, wtc: &WhatToCount) -> Count {
         count.lines = string.lines().count();
     }
     if wtc.words {
-        count.words = string.split_whitespace().count();
+        count.words = string.words().count();
     }
     if wtc.chars {
-        count.chars = string.len();
+        count.chars = string.chars().count();
+        //count.chars = string.graphemes().count();
     }
-    // Todo: bytes not working; exit immediately
     if wtc.bytes {
-        eprintln!("Bytes not yet supported.");
-        ::std::process::exit(1);
+        count.bytes = string.len();
     }
 
     // Return Count
